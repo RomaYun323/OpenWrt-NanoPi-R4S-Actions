@@ -71,6 +71,14 @@ jobs:
       - name: Check out configuration
         uses: actions/checkout@v4
 
+      - name: Refuse tracked private settings
+        shell: bash
+        run: |
+          if git ls-files --error-unmatch configs/first-boot-settings.conf >/dev/null 2>&1; then
+            echo '::error::configs/first-boot-settings.conf must never be committed.'
+            exit 1
+          fi
+
       - name: Free runner disk space
         shell: bash
         run: |
@@ -192,6 +200,7 @@ jobs:
           OPENWRT_ENABLE_ARWI: ${{ inputs.include_arwi }}
           OPENWRT_ENABLE_BANDIX: ${{ inputs.include_bandix }}
           OPENWRT_ENABLE_ADGUARDHOME: ${{ inputs.include_adguardhome }}
+          OPENWRT_INCLUDE_FIRST_BOOT_SETTINGS: 'false'
         run: bash scripts/build-openwrt-imagebuilder.sh
 
       - name: Show disk usage
