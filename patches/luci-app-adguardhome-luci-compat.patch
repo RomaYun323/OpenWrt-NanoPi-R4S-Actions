@@ -1,0 +1,7 @@
+diff --git a/Makefile b/Makefile
+index ea38e09..e0809c4 100644
+--- a/Makefile
++++ b/Makefile
+@@ -12 +12 @@ LUCI_TITLE:=LuCI app for AdGuard Home
+-LUCI_DEPENDS:=+!wget&&!curl:curl
++LUCI_DEPENDS:=+luci-compat +!wget&&!curl:curl

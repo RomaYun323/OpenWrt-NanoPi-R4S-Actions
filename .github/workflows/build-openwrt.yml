@@ -1,0 +1,209 @@
+name: Build public OpenWrt firmware
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_channel:
+        description: OpenWrt 編譯通道
+        required: true
+        default: release
+        type: choice
+        options:
+          - release
+          - snapshot
+      release_version:
+        description: Release 版本（Snapshot 會忽略）
+        required: true
+        default: 25.12.5
+        type: string
+      luci_language:
+        description: LuCI 介面語言（繁中／English）
+        required: true
+        default: zh_Hant
+        type: choice
+        options:
+          - zh_Hant
+          - en
+      rootfs_partsize_mib:
+        description: 映像 Rootfs 分割區大小（MiB）
+        required: true
+        default: '1024'
+        type: string
+      include_extra_packages:
+        description: 加入 extra-packages.conf 中的官方額外套件
+        required: true
+        default: true
+        type: boolean
+      include_aurora:
+        description: 加入 Aurora 主題與設定介面
+        required: true
+        default: true
+        type: boolean
+      include_arwi:
+        description: 加入 Arwi Dashboard
+        required: true
+        default: true
+        type: boolean
+      include_bandix:
+        description: 加入 Bandix backend 與 LuCI 介面
+        required: true
+        default: true
+        type: boolean
+      include_adguardhome:
+        description: 加入 AdGuard Home LuCI 介面
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: openwrt-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+
+    steps:
+      - name: Check out configuration
+        uses: actions/checkout@v4
+
+      - name: Free runner disk space
+        shell: bash
+        run: |
+          sudo rm -rf -- /usr/local/lib/android /usr/share/dotnet /opt/ghc
+          df -h /
+
+      - name: Install SDK and ImageBuilder dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            bison build-essential curl file flex g++ gawk gcc-multilib gettext git \
+            libncurses-dev libssl-dev python3 python3-dev python3-pyelftools \
+            python3-setuptools rsync swig unzip wget zlib1g-dev zstd
+
+      - name: Read build metadata
+        id: metadata
+        shell: bash
+        env:
+          BUILD_CHANNEL: ${{ inputs.build_channel }}
+          RELEASE_VERSION: ${{ inputs.release_version }}
+          LUCI_LANGUAGE: ${{ inputs.luci_language }}
+          ROOTFS_PARTSIZE_MIB: ${{ inputs.rootfs_partsize_mib }}
+          BUILD_SQUASHFS: 'true'
+          BUILD_EXT4: 'true'
+          INCLUDE_EXTRA_PACKAGES: ${{ inputs.include_extra_packages }}
+          INCLUDE_AURORA: ${{ inputs.include_aurora }}
+          INCLUDE_ARWI: ${{ inputs.include_arwi }}
+          INCLUDE_BANDIX: ${{ inputs.include_bandix }}
+          INCLUDE_ADGUARDHOME: ${{ inputs.include_adguardhome }}
+        run: |
+          [[ "$BUILD_CHANNEL" == 'release' || "$BUILD_CHANNEL" == 'snapshot' ]] || {
+            echo '::error::Invalid build channel.'
+            exit 1
+          }
+          [[ "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo '::error::Release version must use x.y.z format.'
+            exit 1
+          }
+          [[ "$LUCI_LANGUAGE" == 'zh_Hant' || "$LUCI_LANGUAGE" == 'en' ]] || {
+            echo '::error::Invalid LuCI language.'
+            exit 1
+          }
+          [[ "$ROOTFS_PARTSIZE_MIB" =~ ^[1-9][0-9]{0,6}$ ]] &&
+            (( 10#$ROOTFS_PARTSIZE_MIB <= 1048576 )) || {
+            echo '::error::Rootfs partition size must be an integer from 1 to 1048576 MiB.'
+            exit 1
+          }
+          [[ "$BUILD_SQUASHFS" == 'true' || "$BUILD_SQUASHFS" == 'false' ]] || {
+            echo '::error::Invalid SquashFS selection.'
+            exit 1
+          }
+          [[ "$BUILD_EXT4" == 'true' || "$BUILD_EXT4" == 'false' ]] || {
+            echo '::error::Invalid ext4 selection.'
+            exit 1
+          }
+          [[ "$BUILD_SQUASHFS" == 'true' || "$BUILD_EXT4" == 'true' ]] || {
+            echo '::error::Select at least one firmware output format.'
+            exit 1
+          }
+          [[ "$INCLUDE_EXTRA_PACKAGES" == 'true' || "$INCLUDE_EXTRA_PACKAGES" == 'false' ]] || {
+            echo '::error::Invalid extra-packages selection.'
+            exit 1
+          }
+          if [[ "$BUILD_CHANNEL" == 'release' ]]; then
+            label="release-$RELEASE_VERSION"
+            official_url="https://downloads.openwrt.org/releases/$RELEASE_VERSION/targets/rockchip/armv8"
+          else
+            label='snapshot'
+            official_url='https://downloads.openwrt.org/snapshots/targets/rockchip/armv8'
+          fi
+          official_revision="$(curl --fail --location --retry 3 "$official_url/version.buildinfo")"
+          [[ "$official_revision" =~ ^r[0-9]+-[0-9a-f]+$ ]] || {
+            echo '::error::Invalid official version.buildinfo.'
+            exit 1
+          }
+          echo "label=$label" >> "$GITHUB_OUTPUT"
+          echo "official_revision=$official_revision" >> "$GITHUB_OUTPUT"
+          echo "official_url=$official_url" >> "$GITHUB_OUTPUT"
+          {
+            echo '### OpenWrt build selection'
+            echo
+            echo "- Channel: \`$BUILD_CHANNEL\`"
+            echo "- Release version: \`$RELEASE_VERSION\`$([[ "$BUILD_CHANNEL" == 'snapshot' ]] && echo ' (ignored)')"
+            echo "- LuCI language: \`$LUCI_LANGUAGE\`"
+            echo "- Rootfs partition: \`$ROOTFS_PARTSIZE_MIB MiB\`"
+            echo '- Firmware images: `SquashFS + ext4`'
+            echo "- Official ImageBuilder/SDK: \`$official_revision\`"
+            echo "- Official source: \`$official_url\`"
+            echo '- Base configuration: `official NanoPi R4S profile`'
+            echo "- Official extra packages: \`$INCLUDE_EXTRA_PACKAGES\`"
+            echo "- Aurora: \`$INCLUDE_AURORA\`"
+            echo "- Arwi Dashboard: \`$INCLUDE_ARWI\`"
+            echo "- Bandix: \`$INCLUDE_BANDIX\`"
+            echo "- AdGuard Home LuCI: \`$INCLUDE_ADGUARDHOME\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Restore official tool archives
+        uses: actions/cache@v4
+        with:
+          path: .cache/imagebuilder/downloads
+          key: imagebuilder-${{ runner.os }}-${{ steps.metadata.outputs.label }}-${{ steps.metadata.outputs.official_revision }}
+
+      - name: Build latest plugins and assemble firmware
+        shell: bash
+        env:
+          OPENWRT_SELECTION_MODE: inputs
+          OPENWRT_IMAGEBUILDER_CACHE: ${{ github.workspace }}/.cache/imagebuilder
+          OPENWRT_IMAGEBUILDER_WORK: ${{ runner.temp }}/openwrt-imagebuilder-work
+          OPENWRT_IMAGEBUILDER_OUTPUT: ${{ runner.temp }}/openwrt-imagebuilder-output
+          OPENWRT_BUILD_CHANNEL: ${{ inputs.build_channel }}
+          OPENWRT_RELEASE_VERSION: ${{ inputs.release_version }}
+          OPENWRT_LUCI_LANGUAGE: ${{ inputs.luci_language }}
+          OPENWRT_ROOTFS_PARTSIZE_MIB: ${{ inputs.rootfs_partsize_mib }}
+          OPENWRT_BUILD_SQUASHFS: 'true'
+          OPENWRT_BUILD_EXT4: 'true'
+          OPENWRT_ENABLE_EXTRA_PACKAGES: ${{ inputs.include_extra_packages }}
+          OPENWRT_ENABLE_AURORA: ${{ inputs.include_aurora }}
+          OPENWRT_ENABLE_ARWI: ${{ inputs.include_arwi }}
+          OPENWRT_ENABLE_BANDIX: ${{ inputs.include_bandix }}
+          OPENWRT_ENABLE_ADGUARDHOME: ${{ inputs.include_adguardhome }}
+        run: bash scripts/build-openwrt-imagebuilder.sh
+
+      - name: Show disk usage
+        if: always()
+        shell: bash
+        run: df -h /
+
+      - name: Upload NanoPi R4S firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: openwrt-${{ steps.metadata.outputs.label }}-nanopi-r4s
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/openwrt-imagebuilder-output/*

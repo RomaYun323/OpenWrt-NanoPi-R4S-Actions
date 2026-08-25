@@ -1,0 +1,4 @@
+# Format: name url ref full-40-character-commit
+# Update with scripts/update-third-party-locks.py when changing the source baseline.
+luci-theme-aurora https://github.com/eamonxg/luci-theme-aurora.git master 411c19ff1646cdfc8d1e8f1f6d93da9e8f02ee11
+luci-app-aurora-config https://github.com/eamonxg/luci-app-aurora-config.git master 110aeca1ffab6d2dece43dcd28b15efe00d5ca83
