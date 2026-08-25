@@ -1,0 +1,88 @@
+name: Update third-party plugins
+
+on:
+  workflow_dispatch:
+    inputs:
+      update_aurora:
+        description: 更新 Aurora
+        required: true
+        default: true
+        type: boolean
+      update_arwi:
+        description: 更新 Arwi Dashboard
+        required: true
+        default: true
+        type: boolean
+      update_bandix:
+        description: 更新 Bandix
+        required: true
+        default: true
+        type: boolean
+      update_adguardhome:
+        description: 更新 AdGuard Home LuCI
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: update-third-party-plugins
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Update selected lock files
+        env:
+          UPDATE_AURORA: ${{ inputs.update_aurora }}
+          UPDATE_ARWI: ${{ inputs.update_arwi }}
+          UPDATE_BANDIX: ${{ inputs.update_bandix }}
+          UPDATE_ADGUARDHOME: ${{ inputs.update_adguardhome }}
+        run: python3 scripts/update-third-party-locks.py
+
+      - name: Inspect changes
+        id: changes
+        shell: bash
+        run: |
+          if git diff --quiet -- configs/*.lock; then
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+            echo '### All selected plugins are already up to date' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+            {
+              echo '### Third-party lock updates'
+              echo
+              echo '```diff'
+              git diff -- configs/*.lock
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Create update pull request
+        if: steps.changes.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          branch="automation/update-third-party-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch --create "$branch"
+          git add configs/*.lock
+          git commit -m 'Update third-party plugin locks'
+          git push --set-upstream origin "$branch"
+          gh pr create \
+            --base main \
+            --head "$branch" \
+            --title 'Update third-party plugin locks' \
+            --body "Automated lock update from workflow run ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}."
