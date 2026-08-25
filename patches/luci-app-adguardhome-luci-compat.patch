@@ -1,7 +1,8 @@
-diff --git a/Makefile b/Makefile
-index ea38e09..e0809c4 100644
 --- a/Makefile
 +++ b/Makefile
-@@ -12 +12 @@ LUCI_TITLE:=LuCI app for AdGuard Home
+@@ -12,4 +12,4 @@
+ LUCI_TITLE:=LuCI app for AdGuard Home
 -LUCI_DEPENDS:=+!wget&&!curl:curl
 +LUCI_DEPENDS:=+luci-compat +!wget&&!curl:curl
+ LUCI_PKGARCH:=all
+ LUCI_DESCRIPTION:=A powerful LuCI interface for managing AdGuard Home - a DNS-based ad and tracker blocker that protects all devices on your network
