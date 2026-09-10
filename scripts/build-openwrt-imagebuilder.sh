@@ -5,6 +5,9 @@ project_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 # WSL inherits Windows PATH entries containing spaces. GNU find rejects those
 # during ImageBuilder's secure -execdir phase, so use Linux tool paths only.
 export PATH='/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+# Official SDK/ImageBuilder host LibreSSL embeds the build server's missing
+# openssl.cnf path. These signing and inspection commands need no config file.
+export OPENSSL_CONF='/dev/null'
 settings_file="$project_root/configs/build-settings.conf"
 image_settings_file="$project_root/configs/image-settings.conf"
 extra_packages_file="$project_root/configs/extra-packages.conf"
