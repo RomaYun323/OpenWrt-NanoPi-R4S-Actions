@@ -1,4 +1,4 @@
 # Format: name url ref full-40-character-commit
 # After editing, run: .\openwrt.ps1 third-party
-luci-theme-aurora https://github.com/eamonxg/luci-theme-aurora.git master 411c19ff1646cdfc8d1e8f1f6d93da9e8f02ee11
-luci-app-aurora-config https://github.com/eamonxg/luci-app-aurora-config.git master 110aeca1ffab6d2dece43dcd28b15efe00d5ca83
+luci-theme-aurora https://github.com/eamonxg/luci-theme-aurora.git master c8e8be3a86b324e1daa44e3406b2b8561437c512
+luci-app-aurora-config https://github.com/eamonxg/luci-app-aurora-config.git master fd7a53765ad2ee50c0a90c9603d93184d9720280
