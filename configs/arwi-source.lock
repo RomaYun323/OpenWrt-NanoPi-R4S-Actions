@@ -1,3 +1,3 @@
 # Format: name url ref full-40-character-commit
-# Update with scripts/update-third-party-locks.py when changing the source baseline.
+# After editing, run: .\openwrt.ps1 third-party
 luci-app-arwi-dashboard https://github.com/derisamedia/luci-app-arwi-dashboard.git 1.2.0-APK 52728b9fcdc9a90996984a8b3d08f979f0b8895d
