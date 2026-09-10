@@ -1,3 +1,3 @@
 # Format: name url ref full-40-character-commit
 # After editing, run: .\openwrt.ps1 third-party
-luci-app-adguardhome https://github.com/stevenjoezhang/luci-app-adguardhome.git v1.19 012c223418192ee804df796cfe8e4d0b766b66ef
+luci-app-adguardhome https://github.com/stevenjoezhang/luci-app-adguardhome.git v1.20 0b228fcd2c4c1ae8e5c90ad1c507feef0c2ad3e8
