@@ -1,4 +1,4 @@
 # Format: name url ref full-40-character-commit
-# After editing, run: .\openwrt.ps1 third-party
+# Update with scripts/update-third-party-locks.py when changing the source baseline.
 bandix https://github.com/timsaya/openwrt-bandix.git v0.12.10 0cc5963fe009575fe20dfd1aa2dcf9b9f05f6712
 luci-app-bandix https://github.com/timsaya/luci-app-bandix.git v0.12.11 0bd9b61740c8798ca86317eb6e0784fb32dd51f5
