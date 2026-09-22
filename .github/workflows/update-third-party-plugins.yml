@@ -81,8 +81,18 @@ jobs:
           git add configs/*.lock
           git commit -m 'Update third-party plugin locks'
           git push --set-upstream origin "$branch"
-          gh pr create \
+          if gh pr create \
             --base main \
             --head "$branch" \
             --title 'Update third-party plugin locks' \
-            --body "Automated lock update from workflow run ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}."
+            --body "Automated lock update from workflow run ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}."; then
+            echo "### Pull request created" >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "### Update branch pushed"
+              echo
+              echo "GitHub could not create the pull request automatically."
+              echo
+              echo "Create it manually from branch: \`$branch\`"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
