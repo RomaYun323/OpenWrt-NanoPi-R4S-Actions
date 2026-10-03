@@ -1,3 +1,0 @@
-# Format: name url ref full-40-character-commit
-# Update with scripts/update-third-party-locks.py when changing the source baseline.
-luci-app-adguardhome https://github.com/stevenjoezhang/luci-app-adguardhome.git v1.21 15d42a57f72f2e5bbe6b0dd55febc7eea03af740
