@@ -143,6 +143,28 @@ jobs:
             echo '::error::Invalid extra-packages selection.'
             exit 1
           }
+          for selection in INCLUDE_AURORA INCLUDE_ARWI INCLUDE_BANDIX INCLUDE_ADGUARDHOME; do
+            value="${!selection}"
+            [[ "$value" == 'true' || "$value" == 'false' ]] || {
+              echo "::error::Invalid $selection selection."
+              exit 1
+            }
+          done
+          third_party_packages_file="$RUNNER_TEMP/third-party-packages.conf"
+          : > "$third_party_packages_file"
+          if [[ "$INCLUDE_AURORA" == 'true' ]]; then
+            printf '%s\n' luci-theme-aurora luci-app-aurora-config >> "$third_party_packages_file"
+          fi
+          if [[ "$INCLUDE_ARWI" == 'true' ]]; then
+            printf '%s\n' luci-app-arwi-dashboard >> "$third_party_packages_file"
+          fi
+          if [[ "$INCLUDE_BANDIX" == 'true' ]]; then
+            printf '%s\n' bandix luci-app-bandix >> "$third_party_packages_file"
+          fi
+          if [[ "$INCLUDE_ADGUARDHOME" == 'true' ]]; then
+            printf '%s\n' luci-app-adguardhome >> "$third_party_packages_file"
+          fi
+          echo "third_party_packages_file=$third_party_packages_file" >> "$GITHUB_OUTPUT"
           if [[ "$BUILD_CHANNEL" == 'release' ]]; then
             label="release-$RELEASE_VERSION"
             official_url="https://downloads.openwrt.org/releases/$RELEASE_VERSION/targets/rockchip/armv8"
@@ -185,7 +207,7 @@ jobs:
       - name: Build latest plugins and assemble firmware
         shell: bash
         env:
-          OPENWRT_SELECTION_MODE: inputs
+          OPENWRT_SELECTION_MODE: config
           OPENWRT_IMAGEBUILDER_CACHE: ${{ github.workspace }}/.cache/imagebuilder
           OPENWRT_IMAGEBUILDER_WORK: ${{ runner.temp }}/openwrt-imagebuilder-work
           OPENWRT_IMAGEBUILDER_OUTPUT: ${{ runner.temp }}/openwrt-imagebuilder-output
@@ -196,10 +218,8 @@ jobs:
           OPENWRT_BUILD_SQUASHFS: 'true'
           OPENWRT_BUILD_EXT4: 'true'
           OPENWRT_ENABLE_EXTRA_PACKAGES: ${{ inputs.include_extra_packages }}
-          OPENWRT_ENABLE_AURORA: ${{ inputs.include_aurora }}
-          OPENWRT_ENABLE_ARWI: ${{ inputs.include_arwi }}
-          OPENWRT_ENABLE_BANDIX: ${{ inputs.include_bandix }}
-          OPENWRT_ENABLE_ADGUARDHOME: ${{ inputs.include_adguardhome }}
+          OPENWRT_ENABLE_THIRD_PARTY_PACKAGES: 'true'
+          OPENWRT_THIRD_PARTY_PACKAGES_FILE: ${{ steps.metadata.outputs.third_party_packages_file }}
           OPENWRT_INCLUDE_FIRST_BOOT_SETTINGS: 'false'
         run: bash scripts/build-openwrt-imagebuilder.sh
 

@@ -11,7 +11,7 @@ export OPENSSL_CONF='/dev/null'
 settings_file="$project_root/configs/build-settings.conf"
 image_settings_file="$project_root/configs/image-settings.conf"
 extra_packages_file="$project_root/configs/extra-packages.conf"
-third_party_packages_file="$project_root/configs/third-party-packages.conf"
+third_party_packages_file="${OPENWRT_THIRD_PARTY_PACKAGES_FILE:-$project_root/configs/third-party-packages.conf}"
 target='rockchip'
 subtarget='armv8'
 profile='friendlyarm_nanopi-r4s'
@@ -56,12 +56,6 @@ read_setting() {
     [[ "$count" == '1' ]] || die "$file must contain exactly one valid $key setting"
     value="$(sed -e 's/\r$//' -n -e "s/^${key}=\"\([^\"]*\)\"$/\1/p" "$file")"
     printf '%s' "$value"
-}
-
-enabled_in_file() {
-    local file="$1"
-    local package="$2"
-    grep -Fqx "$package" "$file"
 }
 
 append_enabled_packages() {
@@ -172,27 +166,8 @@ validate_boolean OPENWRT_VALIDATE_ONLY "$validate_only"
 [[ "$build_squashfs" == 'true' || "$build_ext4" == 'true' ]] || die 'Select at least one filesystem'
 
 if [[ "$selection_mode" == 'inputs' ]]; then
-    enable_aurora="${OPENWRT_ENABLE_AURORA:-true}"
-    enable_arwi="${OPENWRT_ENABLE_ARWI:-true}"
-    enable_bandix="${OPENWRT_ENABLE_BANDIX:-true}"
-    enable_adguardhome="${OPENWRT_ENABLE_ADGUARDHOME:-true}"
-else
-    if [[ "$enable_third_party" == 'true' ]]; then
-        enabled_in_file "$third_party_packages_file" luci-theme-aurora && enable_aurora=true || enable_aurora=false
-        enabled_in_file "$third_party_packages_file" luci-app-arwi-dashboard && enable_arwi=true || enable_arwi=false
-        enabled_in_file "$third_party_packages_file" bandix && enable_bandix=true || enable_bandix=false
-        enabled_in_file "$third_party_packages_file" luci-app-adguardhome && enable_adguardhome=true || enable_adguardhome=false
-    else
-        enable_aurora=false
-        enable_arwi=false
-        enable_bandix=false
-        enable_adguardhome=false
-    fi
+    die 'OPENWRT_SELECTION_MODE=inputs is no longer supported; use config selection'
 fi
-validate_boolean OPENWRT_ENABLE_AURORA "$enable_aurora"
-validate_boolean OPENWRT_ENABLE_ARWI "$enable_arwi"
-validate_boolean OPENWRT_ENABLE_BANDIX "$enable_bandix"
-validate_boolean OPENWRT_ENABLE_ADGUARDHOME "$enable_adguardhome"
 
 if [[ "$validate_only" == 'true' ]]; then
     printf 'ImageBuilder configuration validation passed.\n'
@@ -245,13 +220,11 @@ extract_archive "$download_dir/$imagebuilder_archive" "$work_root/imagebuilder"
 sdk_dir="$work_root/sdk"
 imagebuilder_dir="$work_root/imagebuilder"
 
-export UPDATE_AURORA="$enable_aurora"
-export UPDATE_ARWI="$enable_arwi"
-export UPDATE_BANDIX="$enable_bandix"
-export UPDATE_ADGUARDHOME="$enable_adguardhome"
 resolved_sources="$work_root/third-party-sources.buildinfo"
-if [[ "$enable_aurora" == 'true' || "$enable_arwi" == 'true' || "$enable_bandix" == 'true' || "$enable_adguardhome" == 'true' ]]; then
-    python3 "$project_root/scripts/update-third-party-locks.py" --resolve-output "$resolved_sources"
+if [[ "$enable_third_party" == 'true' ]]; then
+    python3 "$project_root/scripts/update-third-party-locks.py" \
+        --packages-file "$third_party_packages_file" \
+        --resolve-output "$resolved_sources"
 else
     : > "$resolved_sources"
 fi
@@ -282,24 +255,11 @@ run_logged 'Preparing LuCI host tools' "$package_log" \
     make -C "$sdk_dir/feeds/luci/modules/luci-base" TOPDIR="$sdk_dir" host-compile
 export PATH="$sdk_dir/staging_dir/host/bin:$PATH"
 
-# The official LuCI feed also contains luci-app-adguardhome.  When the newer
-# third-party version is selected, remove only that feed symlink so metadata is
-# generated from the source resolved above.
-if [[ "$enable_adguardhome" == 'true' ]]; then
-    official_adguardhome="$sdk_dir/package/feeds/luci/luci-app-adguardhome"
-    if [[ -L "$official_adguardhome" ]]; then
-        expected_adguardhome="$sdk_dir/feeds/luci/applications/luci-app-adguardhome"
-        actual_adguardhome="$(readlink -f "$official_adguardhome")"
-        [[ "$actual_adguardhome" == "$expected_adguardhome" ]] \
-            || die "Refusing to remove unexpected AdGuardHome package link: $official_adguardhome"
-        unlink "$official_adguardhome"
-    fi
-fi
-
 custom_packages=()
-while read -r name url ref commit extra; do
+while read -r name url mode ref commit extra; do
     [[ -z "${name:-}" ]] && continue
-    [[ -z "${extra:-}" && "$commit" =~ ^[0-9a-f]{40}$ ]] || die "Invalid resolved source: $name"
+    [[ -z "${extra:-}" && ( "$mode" == 'release' || "$mode" == 'repository' ) && "$commit" =~ ^[0-9a-f]{40}$ ]] \
+        || die "Invalid resolved source: $name"
     source_dir="$work_root/sources/$name"
     git init --quiet "$source_dir"
     git -C "$source_dir" remote add origin "$url"
@@ -307,14 +267,24 @@ while read -r name url ref commit extra; do
     git -C "$source_dir" checkout --quiet --detach "$commit"
     package_dir="$sdk_dir/package/$name"
     rm -rf -- "$package_dir"
+    while IFS= read -r official_link; do
+        [[ -L "$official_link" ]] || continue
+        official_target="$(readlink -f "$official_link")"
+        [[ "$official_target" == "$sdk_dir/feeds/"* ]] \
+            || die "Refusing to remove unexpected package link: $official_link"
+        unlink "$official_link"
+    done < <(find "$sdk_dir/package/feeds" -type l -name "$name" -print 2>/dev/null || true)
     cp -a "$source_dir" "$package_dir"
     rm -rf -- "$package_dir/.git"
     if [[ "$name" == 'luci-app-adguardhome' ]]; then
-        git -C "$package_dir" apply "$project_root/patches/luci-app-adguardhome-luci-compat.patch"
-        # OpenWrt's official LuCI feed now ships a date-based version of the
-        # same package name.  Give this upstream v1.19 package a higher local
-        # packaging version so APK selects the freshly resolved custom source.
-        sed -i -E 's/^PKG_VERSION:=/PKG_VERSION:=99./' "$package_dir/Makefile"
+        adguard_makefile="$package_dir/Makefile"
+        if [[ -f "$adguard_makefile" ]] && ! grep -q '^LUCI_DEPENDS:.*luci-compat' "$adguard_makefile"; then
+            if grep -q '^LUCI_DEPENDS:=' "$adguard_makefile"; then
+                sed -i 's/^LUCI_DEPENDS:=/LUCI_DEPENDS:=+luci-compat /' "$adguard_makefile"
+            else
+                printf '\nLUCI_DEPENDS:=+luci-compat\n' >> "$adguard_makefile"
+            fi
+        fi
     fi
     custom_packages+=("$name")
 done < "$resolved_sources"
@@ -377,7 +347,14 @@ deduplicate_image_packages
 mkdir -p "$imagebuilder_dir/packages"
 cp -a "$work_root/custom-repository/." "$imagebuilder_dir/packages/"
 cp -a "$project_root/files/." "$work_root/overlay/"
-if [[ "$enable_aurora" != 'true' ]]; then
+aurora_enabled=false
+for name in "${custom_packages[@]}"; do
+    if [[ "$name" == 'luci-theme-aurora' ]]; then
+        aurora_enabled=true
+        break
+    fi
+done
+if [[ "$aurora_enabled" != 'true' ]]; then
     rm -f -- "$work_root/overlay/etc/apk/keys/eamonxg.pem" "$work_root/overlay/etc/apk/repositories.d/customfeeds.list"
 fi
 rm -f -- "$work_root/overlay/etc/first-boot-settings.conf" "$work_root/overlay/etc/uci-defaults/99-custom"

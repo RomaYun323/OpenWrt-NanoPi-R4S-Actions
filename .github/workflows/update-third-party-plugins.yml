@@ -2,27 +2,6 @@ name: Update third-party plugins
 
 on:
   workflow_dispatch:
-    inputs:
-      update_aurora:
-        description: 更新 Aurora
-        required: true
-        default: true
-        type: boolean
-      update_arwi:
-        description: 更新 Arwi Dashboard
-        required: true
-        default: true
-        type: boolean
-      update_bandix:
-        description: 更新 Bandix
-        required: true
-        default: true
-        type: boolean
-      update_adguardhome:
-        description: 更新 AdGuard Home LuCI
-        required: true
-        default: true
-        type: boolean
 
 permissions:
   contents: write
@@ -41,12 +20,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Update selected lock files
-        env:
-          UPDATE_AURORA: ${{ inputs.update_aurora }}
-          UPDATE_ARWI: ${{ inputs.update_arwi }}
-          UPDATE_BANDIX: ${{ inputs.update_bandix }}
-          UPDATE_ADGUARDHOME: ${{ inputs.update_adguardhome }}
+      - name: Update all discovered lock files
         run: python3 scripts/update-third-party-locks.py
 
       - name: Inspect changes
