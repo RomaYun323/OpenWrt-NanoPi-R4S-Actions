@@ -463,6 +463,18 @@ packages_hash="$(printf '%s' "$manifest_names" | sha256sum | awk '{ print $1 }')
 packages_hash_short="${packages_hash:0:12}"
 printf 'Firmware Selector package ID: %s\n' "$packages_hash_short"
 
+# Repository tags are needed only while resolving the build.  APK records a
+# tagged package such as luci-app-adguardhome@custom in /etc/apk/world; that
+# tag would be invalid after flashing because the local build repository is
+# not present on the router. Preserve the generated world set but remove the
+# build-only tag before ImageBuilder copies FILES into the target rootfs.
+apk_world_file="$(find "$imagebuilder_dir/build_dir" -type f \
+    -path '*/root-*/etc/apk/world' -print -quit 2>/dev/null || true)"
+if [[ -n "$apk_world_file" ]]; then
+    mkdir -p "$work_root/overlay/etc/apk"
+    sed 's/@custom//g' "$apk_world_file" > "$work_root/overlay/etc/apk/world"
+fi
+
 make -C "$imagebuilder_dir" image \
     PROFILE="$profile" \
     PACKAGES="${image_packages[*]}" \
