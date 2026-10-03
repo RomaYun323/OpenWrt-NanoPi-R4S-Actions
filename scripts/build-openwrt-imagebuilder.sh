@@ -346,6 +346,22 @@ deduplicate_image_packages
 
 mkdir -p "$imagebuilder_dir/packages"
 cp -a "$work_root/custom-repository/." "$imagebuilder_dir/packages/"
+custom_apks=()
+while IFS= read -r -d '' apk; do
+    custom_apks+=("$apk")
+done < <(find "$imagebuilder_dir/packages" -maxdepth 1 -type f -name '*.apk' -print0)
+if ((${#custom_apks[@]} > 0)); then
+    apk_bin="$imagebuilder_dir/staging_dir/host/bin/apk"
+    [[ -x "$apk_bin" ]] || die "Unable to locate ImageBuilder apk tool: $apk_bin"
+    if ! (
+        cd "$imagebuilder_dir/packages"
+        "$apk_bin" mkndx --allow-untrusted --output packages.adb ./*.apk
+    ); then
+        die 'Unable to build the custom APK package index'
+    fi
+    [[ -s "$imagebuilder_dir/packages/packages.adb" ]] \
+        || die 'Custom APK package index is empty'
+fi
 cp -a "$project_root/files/." "$work_root/overlay/"
 aurora_enabled=false
 for name in "${custom_packages[@]}"; do
