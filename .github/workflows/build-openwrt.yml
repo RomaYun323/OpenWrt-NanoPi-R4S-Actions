@@ -228,6 +228,26 @@ jobs:
         shell: bash
         run: df -h /
 
+      - name: Verify AdGuard Home compatibility dependency
+        if: inputs.include_adguardhome == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest="$(find "$RUNNER_TEMP/openwrt-imagebuilder-output" -maxdepth 1 -type f -name '*.manifest' -print -quit)"
+          if [[ -z "$manifest" ]]; then
+            echo '::error::Unable to find the generated package manifest.'
+            exit 1
+          fi
+          if ! grep -Eq '^luci-app-adguardhome([[:space:]]|$)' "$manifest"; then
+            echo "::error::The manifest does not contain luci-app-adguardhome: $manifest"
+            exit 1
+          fi
+          if ! grep -Eq '^luci-compat([[:space:]]|$)' "$manifest"; then
+            echo "::error::The manifest does not contain luci-compat: $manifest"
+            exit 1
+          fi
+          echo "AdGuard Home compatibility dependency verified in $manifest"
+
       - name: Upload NanoPi R4S firmware
         uses: actions/upload-artifact@v4
         with:

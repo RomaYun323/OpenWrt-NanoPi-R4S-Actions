@@ -333,6 +333,14 @@ for name in "${custom_packages[@]}"; do
     cp -a "${matches[@]}" "$work_root/custom-repository/"
     image_packages+=("$name")
 
+    # luci-app-adguardhome's upstream Makefile does not consistently declare
+    # luci-compat for the APK/ImageBuilder dependency resolver. Keep the
+    # runtime compatibility layer in the final image whenever the app is
+    # selected, while deduplicate_image_packages handles repeated entries.
+    if [[ "$name" == 'luci-app-adguardhome' ]]; then
+        image_packages+=(luci-compat)
+    fi
+
     if [[ "$luci_language" == 'zh_Hant' && "$name" == luci-app-* ]]; then
         translation="luci-i18n-${name#luci-app-}-zh-tw"
         translation_apk="$(find "$sdk_dir/bin/packages" -type f -name "$translation-*.apk" -print -quit)"
