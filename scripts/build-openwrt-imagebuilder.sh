@@ -276,16 +276,6 @@ while read -r name url mode ref commit extra; do
     done < <(find "$sdk_dir/package/feeds" -type l -name "$name" -print 2>/dev/null || true)
     cp -a "$source_dir" "$package_dir"
     rm -rf -- "$package_dir/.git"
-    if [[ "$name" == 'luci-app-adguardhome' ]]; then
-        adguard_makefile="$package_dir/Makefile"
-        if [[ -f "$adguard_makefile" ]] && ! grep -q '^LUCI_DEPENDS:.*luci-compat' "$adguard_makefile"; then
-            if grep -q '^LUCI_DEPENDS:=' "$adguard_makefile"; then
-                sed -i 's/^LUCI_DEPENDS:=/LUCI_DEPENDS:=+luci-compat /' "$adguard_makefile"
-            else
-                printf '\nLUCI_DEPENDS:=+luci-compat\n' >> "$adguard_makefile"
-            fi
-        fi
-    fi
     custom_packages+=("$name")
 done < "$resolved_sources"
 
@@ -332,14 +322,6 @@ for name in "${custom_packages[@]}"; do
     ((${#matches[@]} > 0)) || die "SDK did not produce $name APK"
     cp -a "${matches[@]}" "$work_root/custom-repository/"
     image_packages+=("$name")
-
-    # luci-app-adguardhome's upstream Makefile does not consistently declare
-    # luci-compat for the APK/ImageBuilder dependency resolver. Keep the
-    # runtime compatibility layer in the final image whenever the app is
-    # selected, while deduplicate_image_packages handles repeated entries.
-    if [[ "$name" == 'luci-app-adguardhome' ]]; then
-        image_packages+=(luci-compat)
-    fi
 
     if [[ "$luci_language" == 'zh_Hant' && "$name" == luci-app-* ]]; then
         translation="luci-i18n-${name#luci-app-}-zh-tw"
