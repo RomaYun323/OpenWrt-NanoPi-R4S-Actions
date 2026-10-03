@@ -321,7 +321,12 @@ for name in "${custom_packages[@]}"; do
     while IFS= read -r apk; do matches+=("$apk"); done < <(find "$sdk_dir/bin/packages" -type f -name "$name-*.apk" -print)
     ((${#matches[@]} > 0)) || die "SDK did not produce $name APK"
     cp -a "${matches[@]}" "$work_root/custom-repository/"
-    image_packages+=("$name")
+    if [[ "$name" == 'luci-app-adguardhome' ]]; then
+        # Pin this same-named package to the local third-party repository.
+        image_packages+=("$name@custom")
+    else
+        image_packages+=("$name")
+    fi
 
     if [[ "$luci_language" == 'zh_Hant' && "$name" == luci-app-* ]]; then
         translation="luci-i18n-${name#luci-app-}-zh-tw"
@@ -363,7 +368,7 @@ if ((${#custom_apks[@]} > 0)); then
     # OpenWrt 25.12's APK ImageBuilder no longer accepts the old relative
     # packages/packages.adb repository entry. Add an absolute file URI so
     # locally built packages are available during manifest/image resolution.
-    custom_repository_uri="file://$imagebuilder_dir/packages/packages.adb"
+    custom_repository_uri="@custom file://$imagebuilder_dir/packages/packages.adb"
     if ! grep -Fxq "$custom_repository_uri" "$imagebuilder_dir/repositories"; then
         printf '%s\n' "$custom_repository_uri" >> "$imagebuilder_dir/repositories"
     fi
