@@ -359,6 +359,14 @@ if ((${#custom_apks[@]} > 0)); then
     fi
     [[ -s "$imagebuilder_dir/packages/packages.adb" ]] \
         || die 'Custom APK package index is empty'
+
+    # OpenWrt 25.12's APK ImageBuilder no longer accepts the old relative
+    # packages/packages.adb repository entry. Add an absolute file URI so
+    # locally built packages are available during manifest/image resolution.
+    custom_repository_uri="file://$imagebuilder_dir/packages/packages.adb"
+    if ! grep -Fxq "$custom_repository_uri" "$imagebuilder_dir/repositories"; then
+        printf '%s\n' "$custom_repository_uri" >> "$imagebuilder_dir/repositories"
+    fi
 fi
 cp -a "$project_root/files/." "$work_root/overlay/"
 aurora_enabled=false
