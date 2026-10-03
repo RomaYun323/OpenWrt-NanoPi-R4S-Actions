@@ -353,9 +353,17 @@ done < <(find "$imagebuilder_dir/packages" -maxdepth 1 -type f -name '*.apk' -pr
 if ((${#custom_apks[@]} > 0)); then
     apk_bin="$imagebuilder_dir/staging_dir/host/bin/apk"
     [[ -x "$apk_bin" ]] || die "Unable to locate ImageBuilder apk tool: $apk_bin"
+    make --no-print-directory -C "$imagebuilder_dir" _check_keys >/dev/null
+    apk_signing_key="$imagebuilder_dir/keys/local-private-key.pem"
+    [[ -s "$apk_signing_key" ]] || die "Unable to locate ImageBuilder APK signing key: $apk_signing_key"
     if ! (
         cd "$imagebuilder_dir/packages"
-        "$apk_bin" mkndx --allow-untrusted --output packages.adb ./*.apk
+        "$apk_bin" mkndx \
+            --keys-dir "$imagebuilder_dir/keys" \
+            --sign "$apk_signing_key" \
+            --allow-untrusted \
+            --output packages.adb \
+            ./*.apk
     ); then
         die 'Unable to build the custom APK package index'
     fi
