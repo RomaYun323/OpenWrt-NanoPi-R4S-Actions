@@ -54,6 +54,11 @@ on:
         required: true
         default: true
         type: boolean
+      include_openclash:
+        description: 加入 OpenClash LuCI 介面
+        required: true
+        default: true
+        type: boolean
 
 permissions:
   contents: read
@@ -90,7 +95,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends \
-            bison build-essential curl file flex g++ gawk gcc-multilib gettext git \
+            bison build-essential curl file flex g++ gawk gcc-multilib gettext git opencc \
             libncurses-dev libssl-dev python3 python3-dev python3-pyelftools \
             python3-setuptools rsync swig unzip wget zlib1g-dev zstd
 
@@ -109,6 +114,7 @@ jobs:
           INCLUDE_ARWI: ${{ inputs.include_arwi }}
           INCLUDE_BANDIX: ${{ inputs.include_bandix }}
           INCLUDE_ADGUARDHOME: ${{ inputs.include_adguardhome }}
+          INCLUDE_OPENCLASH: ${{ inputs.include_openclash }}
         run: |
           [[ "$BUILD_CHANNEL" == 'release' || "$BUILD_CHANNEL" == 'snapshot' ]] || {
             echo '::error::Invalid build channel.'
@@ -143,7 +149,7 @@ jobs:
             echo '::error::Invalid extra-packages selection.'
             exit 1
           }
-          for selection in INCLUDE_AURORA INCLUDE_ARWI INCLUDE_BANDIX INCLUDE_ADGUARDHOME; do
+          for selection in INCLUDE_AURORA INCLUDE_ARWI INCLUDE_BANDIX INCLUDE_ADGUARDHOME INCLUDE_OPENCLASH; do
             value="${!selection}"
             [[ "$value" == 'true' || "$value" == 'false' ]] || {
               echo "::error::Invalid $selection selection."
@@ -163,6 +169,9 @@ jobs:
           fi
           if [[ "$INCLUDE_ADGUARDHOME" == 'true' ]]; then
             printf '%s\n' luci-app-adguardhome >> "$third_party_packages_file"
+          fi
+          if [[ "$INCLUDE_OPENCLASH" == 'true' ]]; then
+            printf '%s\n' luci-app-openclash >> "$third_party_packages_file"
           fi
           echo "third_party_packages_file=$third_party_packages_file" >> "$GITHUB_OUTPUT"
           if [[ "$BUILD_CHANNEL" == 'release' ]]; then
