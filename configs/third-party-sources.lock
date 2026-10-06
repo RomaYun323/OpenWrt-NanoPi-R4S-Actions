@@ -5,3 +5,4 @@ luci-theme-aurora https://github.com/eamonxg/luci-theme-aurora.git release v1.4.
 luci-app-aurora-config https://github.com/eamonxg/luci-app-aurora-config.git release v1.2.5 a5299ce0144859f47683ec3bc40805bf616f534f
 bandix https://github.com/timsaya/openwrt-bandix.git release v0.12.11 c95b03d40b30c31e89c090aaf134750f05bf3f19
 luci-app-bandix https://github.com/timsaya/luci-app-bandix.git release v0.12.12 159a6de184b8cbd0694b40f018e737d0a3c82e7e
+luci-app-openclash https://github.com/vernesong/OpenClash.git release v0.47.156 c3a33c1d3407956fdf8f0e0b7c1a4c52e6ad9593
