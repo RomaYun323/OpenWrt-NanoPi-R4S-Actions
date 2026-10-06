@@ -276,36 +276,6 @@ while read -r name url mode ref commit extra; do
     done < <(find "$sdk_dir/package/feeds" -type l -name "$name" -print 2>/dev/null || true)
     cp -a "$source_dir" "$package_dir"
     rm -rf -- "$package_dir/.git"
-    zh_cn_dir="$(find "$package_dir" -type d -path '*/po/zh-cn' -print -quit)"
-    zh_tw_dir="$(find "$package_dir" -type d -path '*/po/zh-tw' -print -quit)"
-    if [[ "$name" == luci-app-* ]] && [[ -n "$zh_cn_dir" && -z "$zh_tw_dir" ]]; then
-        # Convert only LuCI apps that provide Simplified Chinese but no
-        # Traditional Chinese catalogue of their own.
-        mapfile -t zh_cn_files < <(find "$zh_cn_dir" -type f -name '*.po' -print)
-        if ((${#zh_cn_files[@]} > 0)); then
-            command -v opencc >/dev/null 2>&1 \
-                || die 'OpenCC is required to generate zh-tw translations'
-            printf 'OpenCC: converting %s (%d zh-cn catalogue(s), mode=s2tw)\n' \
-                "$name" "${#zh_cn_files[@]}"
-            zh_tw_dir="${zh_cn_dir%/zh-cn}/zh-tw"
-            mkdir -p "$zh_tw_dir"
-            for po_file in "${zh_cn_files[@]}"; do
-                base_name="${po_file##*/}"
-                converted="$zh_tw_dir/$base_name"
-                opencc -c s2tw -i "$po_file" -o "$converted"
-                printf 'OpenCC: %s -> %s\n' "$po_file" "$converted"
-                sed -i \
-                    -e 's/Language: zh_CN/Language: zh_TW/' \
-                    -e 's/Language-Team: Chinese/Language-Team: Traditional Chinese/' \
-                    "$converted"
-            done
-            rm -rf "$zh_cn_dir"
-            while IFS= read -r makefile; do
-                sed -i 's#po/zh-cn#po/zh-tw#g' "$makefile"
-            done < <(find "$package_dir" -type f -name Makefile -print)
-            printf 'OpenCC: completed %s\n' "$name"
-        fi
-    fi
     custom_packages+=("$name")
 done < "$resolved_sources"
 
