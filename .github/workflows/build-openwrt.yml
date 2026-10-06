@@ -205,6 +205,7 @@ jobs:
             echo "- Arwi Dashboard: \`$INCLUDE_ARWI\`"
             echo "- Bandix: \`$INCLUDE_BANDIX\`"
             echo "- AdGuard Home LuCI: \`$INCLUDE_ADGUARDHOME\`"
+            echo "- OpenClash LuCI: \`$INCLUDE_OPENCLASH\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Restore official tool archives
