@@ -1,5 +1,7 @@
 # name repository source-mode ref commit
 luci-app-adguardhome https://github.com/stevenjoezhang/luci-app-adguardhome.git release v1.21 15d42a57f72f2e5bbe6b0dd55febc7eea03af740
+smartdns https://github.com/pymumu/smartdns.git repository master dfc9ef4bd947891178924c06070fbccc3ea370ba
+luci-app-smartdns https://github.com/pymumu/smartdns.git repository master dfc9ef4bd947891178924c06070fbccc3ea370ba
 luci-app-arwi-dashboard https://github.com/derisamedia/luci-app-arwi-dashboard.git release 1.2.0 897433695dd91717aaf9859f973fc0399cd10ada
 luci-theme-aurora https://github.com/eamonxg/luci-theme-aurora.git release v1.4.0 84c27b66952e6fc4be60128067a6b88bfd34afb5
 luci-app-aurora-config https://github.com/eamonxg/luci-app-aurora-config.git release v1.2.5 a5299ce0144859f47683ec3bc40805bf616f534f

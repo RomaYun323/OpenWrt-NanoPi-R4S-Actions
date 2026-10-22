@@ -238,13 +238,25 @@ if [[ ! -f "$sdk_dir/.custom-feeds-ready" ]]; then
         # ImageBuilder obtains all remaining official packages from OpenWrt's
         # signed repositories, so installing every SDK feed is unnecessary.
         ./scripts/feeds install \
-            luci luci-compat luci-lib-jsonc curl zoneinfo-all conntrack iw
+            luci luci-compat luci-lib-jsonc zoneinfo-all conntrack iw
         touch .custom-feeds-ready
     ) > "$feeds_log" 2>&1; then
         tail -n 120 "$feeds_log" >&2 || true
         die "SDK feeds preparation failed; full log: $feeds_log"
     fi
     printf 'SDK feeds prepared.\n'
+fi
+
+# The 25.12 SDK already carries curl in its base_root feed. Older reusable
+# work directories may also contain a packages-feed curl symlink created by a
+# previous Builder version; keeping both recipes causes a LIBCURL_LDAP Kconfig
+# dependency cycle when SmartDNS asks the SDK to build official dependencies.
+duplicate_curl="$sdk_dir/package/feeds/packages/curl"
+if [[ -L "$duplicate_curl" ]]; then
+    duplicate_target="$(readlink -f "$duplicate_curl")"
+    [[ "$duplicate_target" == "$sdk_dir/feeds/packages/"* ]] \
+        || die "Refusing to remove unexpected curl package link: $duplicate_curl"
+    unlink "$duplicate_curl"
 fi
 
 # LuCI package recipes invoke these two small host utilities directly.  Build
@@ -274,8 +286,14 @@ while read -r name url mode ref commit extra; do
             || die "Refusing to remove unexpected package link: $official_link"
         unlink "$official_link"
     done < <(find "$sdk_dir/package/feeds" -type l -name "$name" -print 2>/dev/null || true)
-    cp -a "$source_dir" "$package_dir"
-    rm -rf -- "$package_dir/.git"
+    if [[ "$url" == 'https://github.com/pymumu/smartdns.git' \
+        && ( "$name" == 'smartdns' || "$name" == 'luci-app-smartdns' ) ]]; then
+        bash "$project_root/scripts/prepare-smartdns-packages.sh" \
+            "$name" "$source_dir" "$package_dir" "$commit" "$luci_language"
+    else
+        cp -a "$source_dir" "$package_dir"
+        rm -rf -- "$package_dir/.git"
+    fi
     custom_packages+=("$name")
 done < "$resolved_sources"
 
@@ -296,15 +314,28 @@ if ((${#custom_packages[@]} > 0)); then
     mkdir -p "$sdk_dir/bin/packages"
     for name in "${custom_packages[@]}"; do
         package_dir="$sdk_dir/package/$name"
-        makefile="$(find "$package_dir" -maxdepth 2 -type f -name Makefile -print -quit)"
+        if [[ -f "$package_dir/Makefile" ]]; then
+            makefile="$package_dir/Makefile"
+        else
+            makefile="$(find "$package_dir" -maxdepth 2 -type f -name Makefile -print -quit)"
+        fi
         [[ -n "$makefile" ]] || die "No Makefile found for $name"
         relative_package_dir="${makefile%/Makefile}"
         relative_package_dir="${relative_package_dir#"$sdk_dir/"}"
         find "$sdk_dir/bin/packages" -type f -name "$name-*.apk" -delete
-        run_logged "Cleaning $name" "$package_log" \
-            make -C "$sdk_dir/$relative_package_dir" TOPDIR="$sdk_dir" clean
-        run_logged "Packaging $name" "$package_log" \
-            make -C "$sdk_dir/$relative_package_dir" TOPDIR="$sdk_dir" -j"$jobs" compile
+        if [[ "$name" == 'smartdns' ]]; then
+            # Use the SDK top-level target so official dependencies such as
+            # libopenssl, libatomic and their development headers are staged.
+            run_logged "Cleaning $name" "$package_log" \
+                make -C "$sdk_dir" "$relative_package_dir/clean"
+            run_logged "Packaging $name" "$package_log" \
+                make -C "$sdk_dir" -j"$jobs" V=sc "$relative_package_dir/compile"
+        else
+            run_logged "Cleaning $name" "$package_log" \
+                make -C "$sdk_dir/$relative_package_dir" TOPDIR="$sdk_dir" clean
+            run_logged "Packaging $name" "$package_log" \
+                make -C "$sdk_dir/$relative_package_dir" TOPDIR="$sdk_dir" -j"$jobs" compile
+        fi
     done
 fi
 
@@ -316,23 +347,26 @@ if [[ "$enable_extra" == 'true' ]]; then
     append_enabled_packages "$extra_packages_file"
 fi
 
+declare -A custom_repository_package_names=()
+custom_translations=()
 for name in "${custom_packages[@]}"; do
     matches=()
     while IFS= read -r apk; do matches+=("$apk"); done < <(find "$sdk_dir/bin/packages" -type f -name "$name-*.apk" -print)
     ((${#matches[@]} > 0)) || die "SDK did not produce $name APK"
     cp -a "${matches[@]}" "$work_root/custom-repository/"
-    if [[ "$name" == 'luci-app-adguardhome' ]]; then
-        # Pin this same-named package to the local third-party repository.
-        image_packages+=("$name@custom")
-    else
-        image_packages+=("$name")
-    fi
+    custom_repository_package_names["$name"]=1
+    # Always pin third-party packages to the local repository, even when the
+    # official repositories publish an equal or newer same-named package.
+    image_packages+=("$name@custom")
 
     if [[ "$luci_language" == 'zh_Hant' && "$name" == luci-app-* ]]; then
         translation="luci-i18n-${name#luci-app-}-zh-tw"
         translation_apk="$(find "$sdk_dir/bin/packages" -type f -name "$translation-*.apk" -print -quit)"
         if [[ -n "$translation_apk" ]]; then
             cp -a "$translation_apk" "$work_root/custom-repository/"
+            custom_repository_package_names["$translation"]=1
+            custom_translations+=("$translation")
+            image_packages+=("$translation@custom")
         fi
     fi
 done
@@ -423,6 +457,9 @@ if [[ "$luci_language" == 'zh_Hant' ]]; then
 
     while IFS= read -r app_package; do
         translation="luci-i18n-${app_package#luci-app-}-zh-tw"
+        if [[ -n "${custom_repository_package_names[$translation]+x}" ]]; then
+            continue
+        fi
         if "$imagebuilder_dir/staging_dir/host/bin/apk" \
             --root "$apk_root" \
             --keys-dir "$imagebuilder_dir/keys" \
@@ -452,6 +489,9 @@ make --no-print-directory -C "$imagebuilder_dir" manifest \
 [[ -s "$manifest_file" ]] || die 'ImageBuilder produced an empty final package manifest'
 if ((${#auto_translations[@]} > 0)); then
     printf 'Automatic zh_Hant packages: %s\n' "${auto_translations[*]}"
+fi
+if ((${#custom_translations[@]} > 0)); then
+    printf 'Custom zh_Hant packages: %s\n' "${custom_translations[*]}"
 fi
 if ((${#skipped_translations[@]} > 0)); then
     printf 'Unavailable zh_Hant packages (skipped): %s\n' "${skipped_translations[*]}"
@@ -509,6 +549,7 @@ cp "$metadata_dir/version.buildinfo" "$output_root/openwrt-version.buildinfo"
     printf 'include_first_boot_settings=%s\n' "$include_first_boot"
     printf 'luci_language=%s\n' "$luci_language"
     printf 'automatic_luci_i18n=%s\n' "${auto_translations[*]}"
+    printf 'custom_luci_i18n=%s\n' "${custom_translations[*]}"
     printf 'unavailable_luci_i18n=%s\n' "${skipped_translations[*]}"
     printf 'rootfs_partsize_mib=%s\n' "$rootfs_size"
     printf 'build_squashfs=%s\n' "$build_squashfs"
