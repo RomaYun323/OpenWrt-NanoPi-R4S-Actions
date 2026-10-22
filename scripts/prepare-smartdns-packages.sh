@@ -25,12 +25,12 @@ commit_epoch="$(git -C "$source_dir" show -s --format=%ct "$commit")"
     printf 'Cannot determine SmartDNS commit time for %s\n' "$commit" >&2
     exit 1
 }
-commit_timestamp="$(date -u -d "@$commit_epoch" +%Y%m%d%H%M%S)"
+commit_date="$(date -u -d "@$commit_epoch" +%Y.%m.%d)"
 
 case "$package_name" in
     smartdns)
         cp "$project_root/patches/smartdns/core.Makefile" "$package_dir/Makefile"
-        sed -i "s/@SMARTDNS_COMMIT_TIMESTAMP@/$commit_timestamp/g" "$package_dir/Makefile"
+        sed -i "s/@SMARTDNS_COMMIT_DATE@/$commit_date/g" "$package_dir/Makefile"
         sdk_dir="$(cd -- "$package_dir/../.." && pwd)"
         sdk_source_dir="$sdk_dir/custom-sources/smartdns"
         rm -rf -- "$sdk_source_dir"
@@ -46,7 +46,7 @@ case "$package_name" in
             exit 1
         }
         cp "$project_root/patches/smartdns/luci.Makefile" "$package_dir/Makefile"
-        sed -i "s/@SMARTDNS_COMMIT_TIMESTAMP@/$commit_timestamp/g" "$package_dir/Makefile"
+        sed -i "s/@SMARTDNS_COMMIT_DATE@/$commit_date/g" "$package_dir/Makefile"
         cp -a "$upstream_luci/files/root" "$package_dir/root"
         if [[ -d "$upstream_luci/control" ]]; then
             mkdir -p "$package_dir/ipkg"
