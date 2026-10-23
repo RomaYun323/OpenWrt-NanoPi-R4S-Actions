@@ -323,9 +323,11 @@ if ((${#custom_packages[@]} > 0)); then
         relative_package_dir="${makefile%/Makefile}"
         relative_package_dir="${relative_package_dir#"$sdk_dir/"}"
         find "$sdk_dir/bin/packages" -type f -name "$name-*.apk" -delete
-        if [[ "$name" == 'smartdns' ]]; then
-            # Use the SDK top-level target so official dependencies such as
-            # libopenssl, libatomic and their development headers are staged.
+        if [[ "$name" == 'smartdns' || "$name" == 'luci-app-smartdns' ]]; then
+            # Use SDK top-level targets for SmartDNS so the core's official
+            # dependencies are staged and the LuCI package's dependency on
+            # the custom core is resolved before its APK and translations are
+            # emitted.
             run_logged "Cleaning $name" "$package_log" \
                 make -C "$sdk_dir" "$relative_package_dir/clean"
             run_logged "Packaging $name" "$package_log" \
@@ -560,3 +562,4 @@ cp "$metadata_dir/version.buildinfo" "$output_root/openwrt-version.buildinfo"
     find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
 )
 printf 'Firmware output: %s\n' "$output_root"
+
