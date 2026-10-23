@@ -14,7 +14,7 @@ on:
       release_version:
         description: Release 版本（Snapshot 會忽略）
         required: true
-        default: 25.12.5
+        default: 25.12.6
         type: string
       luci_language:
         description: LuCI 介面語言（繁中／English）
@@ -47,6 +47,11 @@ on:
       include_bandix:
         description: 加入 Bandix backend 與 LuCI 介面
         required: true
+        default: false
+        type: boolean
+      include_bandix_plus:
+        description: 加入 Bandix Plus backend 與 LuCI 介面（不可與 Bandix 同時選擇）
+        required: true
         default: true
         type: boolean
       include_adguardhome:
@@ -57,7 +62,7 @@ on:
       include_smartdns:
         description: 加入上游 SmartDNS 與繁中 LuCI
         required: true
-        default: true
+        default: false
         type: boolean
 
 permissions:
@@ -113,6 +118,7 @@ jobs:
           INCLUDE_AURORA: ${{ inputs.include_aurora }}
           INCLUDE_ARWI: ${{ inputs.include_arwi }}
           INCLUDE_BANDIX: ${{ inputs.include_bandix }}
+          INCLUDE_BANDIX_PLUS: ${{ inputs.include_bandix_plus }}
           INCLUDE_ADGUARDHOME: ${{ inputs.include_adguardhome }}
           INCLUDE_SMARTDNS: ${{ inputs.include_smartdns }}
         run: |
@@ -149,13 +155,17 @@ jobs:
             echo '::error::Invalid extra-packages selection.'
             exit 1
           }
-          for selection in INCLUDE_AURORA INCLUDE_ARWI INCLUDE_BANDIX INCLUDE_ADGUARDHOME INCLUDE_SMARTDNS; do
+          for selection in INCLUDE_AURORA INCLUDE_ARWI INCLUDE_BANDIX INCLUDE_BANDIX_PLUS INCLUDE_ADGUARDHOME INCLUDE_SMARTDNS; do
             value="${!selection}"
             [[ "$value" == 'true' || "$value" == 'false' ]] || {
               echo "::error::Invalid $selection selection."
               exit 1
             }
           done
+          if [[ "$INCLUDE_BANDIX" == 'true' && "$INCLUDE_BANDIX_PLUS" == 'true' ]]; then
+            echo '::error::Bandix and Bandix Plus cannot be enabled at the same time.'
+            exit 1
+          fi
           third_party_packages_file="$RUNNER_TEMP/third-party-packages.conf"
           : > "$third_party_packages_file"
           if [[ "$INCLUDE_AURORA" == 'true' ]]; then
@@ -166,6 +176,9 @@ jobs:
           fi
           if [[ "$INCLUDE_BANDIX" == 'true' ]]; then
             printf '%s\n' bandix luci-app-bandix >> "$third_party_packages_file"
+          fi
+          if [[ "$INCLUDE_BANDIX_PLUS" == 'true' ]]; then
+            printf '%s\n' bandix-plus luci-app-bandix-plus >> "$third_party_packages_file"
           fi
           if [[ "$INCLUDE_ADGUARDHOME" == 'true' ]]; then
             printf '%s\n' luci-app-adguardhome >> "$third_party_packages_file"
@@ -204,6 +217,7 @@ jobs:
             echo "- Aurora: \`$INCLUDE_AURORA\`"
             echo "- Arwi Dashboard: \`$INCLUDE_ARWI\`"
             echo "- Bandix: \`$INCLUDE_BANDIX\`"
+            echo "- Bandix Plus: \`$INCLUDE_BANDIX_PLUS\`"
             echo "- AdGuard Home LuCI: \`$INCLUDE_ADGUARDHOME\`"
             echo "- SmartDNS + zh-tw LuCI: \`$INCLUDE_SMARTDNS\`"
           } >> "$GITHUB_STEP_SUMMARY"
