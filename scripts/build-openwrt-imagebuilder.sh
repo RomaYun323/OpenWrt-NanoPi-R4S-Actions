@@ -36,6 +36,10 @@ run_logged() {
     shift 2
     printf '%s...\n' "$label"
     if ! "$@" >> "$logfile" 2>&1; then
+        printf '%s\n' '--- detected error lines ---' >&2
+        grep -E '(^|[[:space:]])(ERROR:|Error [0-9]+|error:|fatal:)|missing dependencies|No rule to make target|not found' \
+            "$logfile" | tail -n 40 >&2 || true
+        printf '%s\n' '--- final log lines ---' >&2
         tail -n 120 "$logfile" >&2 || true
         die "$label failed; full log: $logfile"
     fi
@@ -334,16 +338,24 @@ if ((${#custom_packages[@]} > 0)); then
         done
     } >> "$sdk_dir/.config"
     run_logged 'Generating SDK package metadata' "$package_log" make -C "$sdk_dir" defconfig
-    # Some SDK subpackage definitions reassert hidden ALL defaults while
-    # defconfig merges feed metadata.  Do not build kernel packages in the SDK:
-    # custom user-space APKs keep their dependency metadata and ImageBuilder
-    # resolves any required kmods from the matching official repository.
+    # A distributable SDK can restore absent tristate symbols to `m` the next
+    # time Kconfig runs.  Record every unrequested package as explicitly off,
+    # then re-enable only the requested custom roots.  Kconfig will select the
+    # real dependency closure from those roots without also enabling optional
+    # packages such as libopenssl-afalg -> kmod-crypto-user.  The SDK does not
+    # ship the complete target kernel tree, so compiling that optional kmod
+    # fails with a missing rng.ko even though SmartDNS itself does not need it.
     sed -i \
         -e 's/^CONFIG_ALL=y$/# CONFIG_ALL is not set/' \
         -e 's/^CONFIG_ALL_KMODS=y$/# CONFIG_ALL_KMODS is not set/' \
         -e 's/^CONFIG_ALL_NONSHARED=y$/# CONFIG_ALL_NONSHARED is not set/' \
-        -e '/^CONFIG_PACKAGE_kmod-.*=m$/d' \
+        -e 's/^CONFIG_PACKAGE_\([^=]*\)=m$/# CONFIG_PACKAGE_\1 is not set/' \
         "$sdk_dir/.config"
+    for name in "${custom_packages[@]}"; do
+        sed -i "/^# CONFIG_PACKAGE_${name} is not set$/d" "$sdk_dir/.config"
+        printf 'CONFIG_PACKAGE_%s=m\n' "$name" >> "$sdk_dir/.config"
+    done
+    run_logged 'Finalizing selected SDK packages' "$package_log" make -C "$sdk_dir" defconfig
     if grep -q '^CONFIG_SIGN_EACH_PACKAGE=y$' "$sdk_dir/.config" && [[ ! -s "$sdk_dir/private-key.pem" ]]; then
         run_logged 'Generating SDK package signing key' "$package_log" \
             "$sdk_dir/staging_dir/host/bin/openssl" ecparam -name prime256v1 \
