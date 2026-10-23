@@ -16,7 +16,10 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 LOCK_DIR = PROJECT_ROOT / "configs"
 SHA_PATTERN = re.compile(r"^[0-9a-f]{40}$")
-TAG_PATTERN = re.compile(r"^(v?)([0-9]+(?:\.[0-9]+){1,3})(.*)$")
+# Common projects use either v1.2.3-style tags or names such as
+# SmartDNS' Release48.4.  Keep the numeric part in group 2 because it is used
+# for version ordering below.
+TAG_PATTERN = re.compile(r"^((?:v|Release)?)([0-9]+(?:\.[0-9]+){0,3})(.*)$")
 GITHUB_URL_PATTERN = re.compile(r"^https://github\.com/([^/]+)/([^/]+?)(?:\.git)?$")
 
 
@@ -120,6 +123,15 @@ def version_key(value: str) -> tuple[int, int, int, int]:
     return tuple((parts + [0, 0, 0, 0])[:4])  # type: ignore[return-value]
 
 
+def release_key(match: re.Match[str]) -> tuple[int, int, int, int, int] | None:
+    suffix = match.group(3)
+    if re.fullmatch(r"-(?:rc|alpha|beta)[0-9.]*", suffix, re.IGNORECASE):
+        return None
+    revision_match = re.fullmatch(r"-r([0-9]+)", suffix, re.IGNORECASE)
+    revision = int(revision_match.group(1)) if revision_match else 0
+    return (*version_key(match.group(2)), revision)
+
+
 def remote_branch_commit(url: str, ref: str) -> str:
     branch_ref = f"refs/heads/{ref}"
     try:
@@ -173,15 +185,18 @@ def latest_release(url: str) -> tuple[str, str]:
             raise
         tag_commits = github_commits
 
-    candidates: list[tuple[tuple[int, int, int, int], str, str]] = []
+    candidates: list[tuple[tuple[int, int, int, int, int], str, str]] = []
     for tag_name, tag_commit in tag_commits.items():
         match = TAG_PATTERN.fullmatch(tag_name)
         if not match:
             continue
-        candidates.append((version_key(match.group(2)), tag_name, peeled_commits.get(tag_name, tag_commit)))
+        key = release_key(match)
+        if key is None:
+            continue
+        candidates.append((key, tag_name, peeled_commits.get(tag_name, tag_commit)))
     if not candidates:
         raise RuntimeError(f"No numeric release tags found for {url}")
-    _, ref, commit = max(candidates, key=lambda item: item[0])
+    _, ref, commit = max(candidates, key=lambda item: (item[0], item[1]))
     return ref, commit
 
 
@@ -276,10 +291,10 @@ def latest_tag(url: str, current_ref: str, locked_commit: str) -> tuple[str, str
     match = TAG_PATTERN.fullmatch(current_ref)
     if not match:
         raise RuntimeError(f"Unsupported version tag format: {current_ref}")
-    prefix, current_version, suffix = match.groups()
-    expected = re.compile(
-        rf"^{re.escape(prefix)}(?P<version>[0-9]+(?:\.[0-9]+){{1,3}}){re.escape(suffix)}$"
-    )
+    prefix = match.group(1)
+    current_key = release_key(match)
+    if current_key is None:
+        raise RuntimeError(f"Pre-release tags are not supported in release mode: {current_ref}")
 
     try:
         tag_commits: dict[str, str] = {}
@@ -309,18 +324,21 @@ def latest_tag(url: str, current_ref: str, locked_commit: str) -> tuple[str, str
     if remote_current != locked_commit:
         raise RuntimeError(f"Current tag was rewritten: {current_ref} ({url})")
 
-    candidates: list[tuple[tuple[int, int, int, int], str, str]] = []
+    candidates: list[tuple[tuple[int, int, int, int, int], str, str]] = []
     for tag_name, tag_commit in tag_commits.items():
-        candidate = expected.fullmatch(tag_name)
-        if not candidate:
+        candidate = TAG_PATTERN.fullmatch(tag_name)
+        if not candidate or candidate.group(1) != prefix:
+            continue
+        key = release_key(candidate)
+        if key is None:
             continue
         commit = peeled_commits.get(tag_name, tag_commit)
-        candidates.append((version_key(candidate.group("version")), tag_name, commit))
+        candidates.append((key, tag_name, commit))
     if not candidates:
         raise RuntimeError(f"No matching version tags found for {current_ref} ({url})")
 
-    latest_version, latest_ref, latest_commit = max(candidates, key=lambda item: item[0])
-    if latest_version <= version_key(current_version):
+    latest_version, latest_ref, latest_commit = max(candidates, key=lambda item: (item[0], item[1]))
+    if latest_version <= current_key:
         return current_ref, locked_commit
     return latest_ref, latest_commit
 

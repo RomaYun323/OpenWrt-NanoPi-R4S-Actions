@@ -229,6 +229,19 @@ else
     : > "$resolved_sources"
 fi
 
+if grep -Eq '^(bandix|luci-app-bandix) ' "$resolved_sources" \
+    && grep -Eq '^(bandix-plus|luci-app-bandix-plus) ' "$resolved_sources"; then
+    die 'Bandix and Bandix Plus packages cannot be enabled together; select exactly one family'
+fi
+if grep -q '^luci-app-bandix ' "$resolved_sources" \
+    && ! grep -q '^bandix ' "$resolved_sources"; then
+    die 'luci-app-bandix requires the third-party bandix package to be enabled'
+fi
+if grep -q '^luci-app-bandix-plus ' "$resolved_sources" \
+    && ! grep -q '^bandix-plus ' "$resolved_sources"; then
+    die 'luci-app-bandix-plus requires the third-party bandix-plus package to be enabled'
+fi
+
 if [[ ! -f "$sdk_dir/.custom-feeds-ready" ]]; then
     feeds_log="$work_root/sdk-feeds.log"
     if ! (
@@ -321,6 +334,16 @@ if ((${#custom_packages[@]} > 0)); then
         done
     } >> "$sdk_dir/.config"
     run_logged 'Generating SDK package metadata' "$package_log" make -C "$sdk_dir" defconfig
+    # Some SDK subpackage definitions reassert hidden ALL defaults while
+    # defconfig merges feed metadata.  Do not build kernel packages in the SDK:
+    # custom user-space APKs keep their dependency metadata and ImageBuilder
+    # resolves any required kmods from the matching official repository.
+    sed -i \
+        -e 's/^CONFIG_ALL=y$/# CONFIG_ALL is not set/' \
+        -e 's/^CONFIG_ALL_KMODS=y$/# CONFIG_ALL_KMODS is not set/' \
+        -e 's/^CONFIG_ALL_NONSHARED=y$/# CONFIG_ALL_NONSHARED is not set/' \
+        -e '/^CONFIG_PACKAGE_kmod-.*=m$/d' \
+        "$sdk_dir/.config"
     if grep -q '^CONFIG_SIGN_EACH_PACKAGE=y$' "$sdk_dir/.config" && [[ ! -s "$sdk_dir/private-key.pem" ]]; then
         run_logged 'Generating SDK package signing key' "$package_log" \
             "$sdk_dir/staging_dir/host/bin/openssl" ecparam -name prime256v1 \

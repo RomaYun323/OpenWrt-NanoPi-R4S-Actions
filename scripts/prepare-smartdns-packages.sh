@@ -83,12 +83,22 @@ case "$package_name" in
         msgfmt --check -o /dev/null "$package_dir/po/zh_Hans/smartdns.po"
         if [[ "$luci_language" == 'zh_Hant' ]]; then
             opencc_bin="${OPENCC_BIN:-opencc}"
+            opencc_config="${OPENCC_CONFIG:-s2tw.json}"
+            portable_opencc_root="$project_root/.cache/opencc-portable/root"
+            if ! command -v "$opencc_bin" >/dev/null 2>&1 \
+                && [[ -x "$portable_opencc_root/usr/bin/opencc" ]]; then
+                opencc_bin="$portable_opencc_root/usr/bin/opencc"
+                opencc_config="${OPENCC_CONFIG:-$portable_opencc_root/usr/share/opencc/s2tw.json}"
+                portable_opencc_lib="$portable_opencc_root/usr/lib/x86_64-linux-gnu"
+                if [[ -d "$portable_opencc_lib" ]]; then
+                    export LD_LIBRARY_PATH="$portable_opencc_lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+                fi
+            fi
             command -v "$opencc_bin" >/dev/null 2>&1 || {
                 printf 'OpenCC is required to generate SmartDNS zh-tw translations.\n' >&2
                 exit 1
             }
             mkdir -p "$package_dir/po/zh_Hant"
-            opencc_config="${OPENCC_CONFIG:-s2tw.json}"
             "$opencc_bin" -c "$opencc_config" \
                 -i "$package_dir/po/zh_Hans/smartdns.po" \
                 -o "$package_dir/po/zh_Hant/smartdns.po"

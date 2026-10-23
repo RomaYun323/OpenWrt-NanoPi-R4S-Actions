@@ -1,9 +1,11 @@
 # name repository source-mode ref commit
 luci-app-adguardhome https://github.com/stevenjoezhang/luci-app-adguardhome.git release v1.21 15d42a57f72f2e5bbe6b0dd55febc7eea03af740
-smartdns https://github.com/pymumu/smartdns.git repository master dfc9ef4bd947891178924c06070fbccc3ea370ba
-luci-app-smartdns https://github.com/pymumu/smartdns.git repository master dfc9ef4bd947891178924c06070fbccc3ea370ba
+smartdns https://github.com/pymumu/smartdns.git release Release48.4 21c940edc65520849ba03544c5cf8d9cf326e680
+luci-app-smartdns https://github.com/pymumu/smartdns.git release Release48.4 21c940edc65520849ba03544c5cf8d9cf326e680
 luci-app-arwi-dashboard https://github.com/derisamedia/luci-app-arwi-dashboard.git release 1.2.0 897433695dd91717aaf9859f973fc0399cd10ada
 luci-theme-aurora https://github.com/eamonxg/luci-theme-aurora.git release v1.4.0 84c27b66952e6fc4be60128067a6b88bfd34afb5
 luci-app-aurora-config https://github.com/eamonxg/luci-app-aurora-config.git release v1.2.5 a5299ce0144859f47683ec3bc40805bf616f534f
 bandix https://github.com/timsaya/openwrt-bandix.git release v0.12.11 c95b03d40b30c31e89c090aaf134750f05bf3f19
 luci-app-bandix https://github.com/timsaya/luci-app-bandix.git release v0.12.12 159a6de184b8cbd0694b40f018e737d0a3c82e7e
+bandix-plus https://github.com/timsaya/openwrt-bandix-plus.git release v0.1.3 fba9704300f2900451e00a1645e11b1f179204b8
+luci-app-bandix-plus https://github.com/timsaya/luci-app-bandix-plus.git release v0.1.3-r2 c4f002f74f3a0f4aeb79fb5d35f5a7bbd3392a1f
