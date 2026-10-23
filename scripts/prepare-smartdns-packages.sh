@@ -82,13 +82,14 @@ case "$package_name" in
         mv "$normalized_po" "$package_dir/po/zh_Hans/smartdns.po"
         msgfmt --check -o /dev/null "$package_dir/po/zh_Hans/smartdns.po"
         if [[ "$luci_language" == 'zh_Hant' ]]; then
-            command -v opencc >/dev/null 2>&1 || {
+            opencc_bin="${OPENCC_BIN:-opencc}"
+            command -v "$opencc_bin" >/dev/null 2>&1 || {
                 printf 'OpenCC is required to generate SmartDNS zh-tw translations.\n' >&2
                 exit 1
             }
             mkdir -p "$package_dir/po/zh_Hant"
             opencc_config="${OPENCC_CONFIG:-s2tw.json}"
-            opencc -c "$opencc_config" \
+            "$opencc_bin" -c "$opencc_config" \
                 -i "$package_dir/po/zh_Hans/smartdns.po" \
                 -o "$package_dir/po/zh_Hant/smartdns.po"
             sed -i \
