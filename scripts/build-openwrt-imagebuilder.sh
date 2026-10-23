@@ -298,6 +298,22 @@ while read -r name url mode ref commit extra; do
 done < "$resolved_sources"
 
 if ((${#custom_packages[@]} > 0)); then
+    # The distributable SDK hard-codes every package as `default m` in its
+    # generated, non-interactive Config-build.in.  Removing selections from
+    # .config alone therefore has no effect: defconfig selects all of them
+    # again.  Turn those SDK-only defaults off, then let the requested packages
+    # select their real dependencies through Kconfig.
+    sed -i \
+        -e '/^config PACKAGE_/,/^$/ s/^\([[:space:]]*\)default m$/\1default n/' \
+        -e '/^config MODULE_DEFAULT_/,/^$/ s/^\([[:space:]]*\)default y$/\1default n/' \
+        "$sdk_dir/Config-build.in"
+    touch "$sdk_dir/.config"
+    sed -i \
+        -e 's/^CONFIG_ALL=y$/# CONFIG_ALL is not set/' \
+        -e 's/^CONFIG_ALL_KMODS=y$/# CONFIG_ALL_KMODS is not set/' \
+        -e 's/^CONFIG_ALL_NONSHARED=y$/# CONFIG_ALL_NONSHARED is not set/' \
+        -e '/^CONFIG_PACKAGE_.*=m$/d' \
+        "$sdk_dir/.config"
     {
         printf 'CONFIG_LUCI_LANG_%s=y\n' "$luci_language"
         for name in "${custom_packages[@]}"; do
@@ -568,4 +584,3 @@ cp "$metadata_dir/version.buildinfo" "$output_root/openwrt-version.buildinfo"
     find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
 )
 printf 'Firmware output: %s\n' "$output_root"
-
